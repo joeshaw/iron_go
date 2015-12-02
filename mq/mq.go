@@ -41,8 +41,9 @@ type Message struct {
 	Timeout int64 `json:"timeout,omitempty"`
 	// Delay is the amount of time in seconds to wait before adding the message
 	// to the queue.
-	Delay         int64 `json:"delay,omitempty"`
-	ReservedCount int64 `json:"reserved_count,omitempty"`
+	Delay         int64  `json:"delay,omitempty"`
+	ReservedCount int64  `json:"reserved_count,omitempty"`
+	Status        string `json:"status,omitempty"`
 	q             Queue
 }
 
@@ -254,11 +255,20 @@ func (q Queue) GetNWithTimeoutAndWait(n, timeout, wait int) (msgs []*Message, er
 		return
 	}
 
+	// IronMQ is broken and Get() is returning messages that are
+	// marked with status = deleted.  They can never be deleted,
+	// and sit around in the queue forever.  WTF.
+	msgs = make([]*Message, 0, len(out.Messages))
 	for _, msg := range out.Messages {
+		if msg.Status == "deleted" {
+			continue
+		}
+
 		msg.q = q
+		msgs = append(msgs, msg)
 	}
 
-	return out.Messages, nil
+	return msgs, nil
 }
 
 func (q Queue) Peek() (msg *Message, err error) {
